@@ -1,0 +1,93 @@
+workflows:
+    sample-workflow:
+        name: QRTom
+        integrations:
+          app_store_connect: "appleid admin"
+        max_build_duration: 120
+        instance_type: mac_mini_m2
+        scripts:
+        - name: Set Info.plist values
+          script: | 
+             PLIST=$CM_BUILD_DIR/Tomas/Info.plist
+             PLIST_BUDDY=/usr/libexec/PlistBuddy
+             $PLIST_BUDDY $PLIST
+        - name: Install CocoaPods dependencies
+          script: | 
+             pod install
+        - name: Set up provisioning profiles settings on Xcode project
+          script: xcode-project use-profiles
+        - name: Increment build number
+          script: | 
+              #!/bin/sh
+              cd $CM_BUILD_DIR
+              LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_ID")
+              LATEST_BUILD_NUMBER=3
+              agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
+        - name: Build ipa for distribution
+          script: | 
+            xcode-project build-ipa --no-show-build-settings \
+              --workspace "$CM_BUILD_DIR/Tomas.xcworkspace" \
+              --scheme "Tomas" \
+              --archive-flags="-destination 'generic/platform=iOS'"
+        environment:
+          vars:
+              XCODE_WORKSPACE:: “Tomas.xcworkspace" # <-- Put the name of your workspace here.
+              XCODE_SCHEME: "Tomas" # <-- Put the name of your scheme here.
+          ios_signing:
+            distribution_type: app_store  # or: ad_hoc | development | enterprise
+            bundle_identifier: fr.tomas.int
+        artifacts:
+        - build/ios/ipa/*.ipa
+        - /tmp/xcodebuild_logs/*.log
+        - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+        - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+        publishing:
+          app_store_connect:
+            # Use referenced App Store Connect API key to authenticate binary upload
+            auth: integration 
+            apple_id: "solutions.mobilite@oslo.fr"
+            
+            # Configuration related to TestFlight (optional)
+    
+            # Optional boolean, defaults to false. Whether or not to submit the uploaded
+            # build to TestFlight beta review.
+            # Note: This action is performed during post-processing.
+            submit_to_testflight: true
+            
+            beta_groups: 
+              - Oslo
+              
+            # Optional boolean, defaults to false. Set to true to automatically expire 
+            # previous build in review or waiting for review in Testflight before
+            # submitting a new build to beta review. Expired builds will no longer be available for testers.
+            # Note: This action is performed during post-processing.
+            expire_build_submitted_for_review: false
+    
+           
+            # Configuration related to App Store (optional)
+    
+            # Optional boolean, defaults to false. Whether or not to submit the uploaded
+            # build to App Store review. Note: This action is performed during post-processing.
+            submit_to_app_store: true
+    
+            # Optional boolean, defaults to false. Set to true to cancel the previous 
+            # submission (if applicable) when submitting a new build to App Store review.
+            # This allows automatically submitting a new build for review if a previous submission exists.
+            # Note: This action is performed during post-processing.
+            cancel_previous_submissions: false
+            
+            # Optional, defaults to MANUAL. Supported values: MANUAL, AFTER_APPROVAL or SCHEDULED
+            release_type: MANUAL
+    
+           
+            # Optional. The name of the person or entity that owns the exclusive rights
+            # to your app, preceded by the year the rights were obtained.
+            copyright: 2021 OSLO Ltd
+    
+            # Optional boolean. Whether or not to release an App Store version update in phases.
+            # With this option turned on, your version update will be released over a 7-day period
+            # to a percentage of your users (selected at random by their Apple ID) with automatic
+            # updates turned on. Learn more from 
+            # https://developer.apple.com/help/app-store-connect/update-your-app/release-a-version-update-in-phases.
+            # If not specified, then App Store version default phased release configuration is reused.
+            phased_release: false
